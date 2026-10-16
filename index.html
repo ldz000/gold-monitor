@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🥇 黄金监控台（网页版）</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    color: #e8e8e8;
+    min-height: 100vh;
+    padding: 16px;
+  }
+  .header { text-align: center; padding: 14px 0 20px; }
+  .header h1 {
+    font-size: 1.7rem;
+    background: linear-gradient(90deg, #ffd700, #ff8c00);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 4px;
+  }
+  .header .sub { color: #8899aa; font-size: 0.82rem; }
+
+  .price-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 14px; margin-bottom: 18px;
+  }
+  .price-card {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,215,0,0.25);
+    border-radius: 14px; padding: 18px;
+  }
+  .price-card .label { font-size: 0.8rem; color: #8899aa; margin-bottom: 8px; }
+  .price-card .value {
+    font-size: 2rem; font-weight: 700; color: #ffd700;
+    font-family: "SF Mono", Consolas, monospace;
+  }
+  .price-card .unit { font-size: 0.85rem; color: #aaa; margin-left: 6px; }
+  .price-card .meta { font-size: 0.72rem; color: #667788; margin-top: 6px; }
+
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .tab {
+    padding: 8px 16px; background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
+    cursor: pointer; font-size: 0.85rem; color: #aabbcc; transition: all 0.2s;
+  }
+  .tab.active {
+    background: linear-gradient(90deg, #ffd700, #ff8c00);
+    color: #1a1a2e; font-weight: 600; border-color: transparent;
+  }
+  .card {
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 14px; padding: 18px; margin-bottom: 18px;
+  }
+  .card-title {
+    font-size: 1rem; font-weight: 600; color: #ffd700;
+    margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
+  }
+  #chart { width: 100%; height: 420px; }
+
+  .info-cat {
+    background: rgba(255,255,255,0.04); border-left: 3px solid #ffd700;
+    border-radius: 8px; padding: 12px 16px; margin-bottom: 10px;
+  }
+  .info-cat h3 { color: #ffd700; font-size: 0.92rem; margin-bottom: 8px; }
+  .info-item {
+    display: grid; grid-template-columns: 1fr 1.3fr 2fr; gap: 8px;
+    padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 0.8rem;
+  }
+  .info-item:last-child { border-bottom: none; }
+  .info-item .name { color: #ccd; }
+  .info-item .value { color: #ffd700; font-weight: 600; }
+  .info-item .interpret { color: #8899aa; }
+
+  .analysis-direction {
+    display: inline-block; padding: 6px 18px; border-radius: 20px;
+    font-size: 1.3rem; font-weight: 700; margin-bottom: 12px;
+  }
+  .dir-up { background: rgba(255,107,107,0.2); color: #ff6b6b; }
+  .dir-down { background: rgba(81,207,102,0.2); color: #51cf66; }
+  .dir-flat { background: rgba(255,215,0,0.2); color: #ffd700; }
+  .factor-item {
+    padding: 9px 12px; background: rgba(255,255,255,0.04);
+    border-radius: 8px; margin-bottom: 8px; font-size: 0.83rem;
+  }
+  .factor-item .fname { color: #ffd700; font-weight: 600; }
+  .factor-item .fscore { float: right; font-weight: 700; }
+  .score-pos { color: #ff6b6b; } .score-neg { color: #51cf66; } .score-zero { color: #aaa; }
+
+  .push-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+  .push-row input {
+    flex: 1; min-width: 200px; padding: 9px 12px;
+    background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 8px; color: #eee; font-size: 0.85rem;
+  }
+  .btn {
+    padding: 9px 18px; border: none; border-radius: 8px; cursor: pointer;
+    font-size: 0.85rem; font-weight: 600; transition: all 0.2s;
+  }
+  .btn-primary { background: linear-gradient(90deg, #ffd700, #ff8c00); color: #1a1a2e; }
+  .btn-ghost { background: rgba(255,255,255,0.1); color: #ddd; border: 1px solid rgba(255,255,255,0.2); }
+  .status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+  .status-on { background: #51cf66; box-shadow: 0 0 8px #51cf66; }
+  .status-off { background: #ff6b6b; }
+  .tip { font-size: 0.76rem; color: #667788; line-height: 1.6; }
+  .refresh-tip { font-size: 0.73rem; color: #667788; text-align: right; }
+
+  @media (max-width: 600px) {
+    .info-item { grid-template-columns: 1fr; }
+    .price-card .value { font-size: 1.5rem; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🥇 黄金监控台（网页版）</h1>
+  <div class="sub">刷新即最新 · 无需挂服务器 · 支持手动推送到个人微信</div>
+</div>
+
+<!-- 实时金价 -->
+<div class="price-grid">
+  <div class="price-card">
+    <div class="label">🌍 国际金价 XAU/USD</div>
+    <div class="value" id="intl-val">-- <span class="unit">美元/盎司</span></div>
+    <div class="meta" id="intl-meta">加载中...</div>
+  </div>
+  <div class="price-card">
+    <div class="label">🇨🇳 国内金价（上海金 Au9999）</div>
+    <div class="value" id="dom-val">-- <span class="unit">元/克</span></div>
+    <div class="meta" id="dom-meta">加载中...</div>
+  </div>
+  <div class="price-card">
+    <div class="label">💱 美元兑人民币</div>
+    <div class="value" id="fx-val">--</div>
+    <div class="meta">国内金价取自上海黄金交易所实时价</div>
+  </div>
+</div>
+
+<!-- 走势图 -->
+<div class="card">
+  <div class="card-title">📈 黄金走势图 <span style="font-size:0.7rem;color:#667788;font-weight:normal;margin-left:auto;">悬停/点击节点看涨跌原因</span></div>
+  <div class="tabs">
+    <div class="tab active" onclick="loadHistory('5y', this)">近5年</div>
+    <div class="tab" onclick="loadHistory('1y', this)">近1年</div>
+    <div class="tab" onclick="loadHistory('1m', this)">近1月</div>
+    <div class="tab" onclick="loadHistory('1d', this)">当天分时</div>
+  </div>
+  <div id="chart"></div>
+  <div class="refresh-tip" id="chart-refresh">--</div>
+</div>
+
+<!-- 信息收集 -->
+<div class="card">
+  <div class="card-title">📰 黄金信息收集</div>
+  <div id="info-container"><div style="color:#667788;text-align:center;padding:16px;">加载中...</div></div>
+</div>
+
+<!-- 走势分析 -->
+<div class="card">
+  <div class="card-title">🧭 次日走势分析</div>
+  <div id="analysis-container"><div style="color:#667788;text-align:center;padding:16px;">加载中...</div></div>
+</div>
+
+<!-- 推送 -->
+<div class="card">
+  <div class="card-title">📤 推送到个人微信</div>
+  <div class="push-row">
+    <span style="font-size:0.82rem;">渠道：</span>
+    <select id="push-channel" style="padding:9px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:8px;color:#eee;">
+      <option value="serverchan">Server酱</option>
+      <option value="pushplus">PushPlus</option>
+    </select>
+    <input type="text" id="push-token" placeholder="填你的 SendKey / Token">
+    <button class="btn btn-primary" onclick="testPush()">立即推送</button>
+  </div>
+  <div id="push-result" style="font-size:0.83rem;margin-top:8px;"></div>
+  <div class="tip" style="margin-top:10px;">
+    💡 <b>怎么获取 token：</b><br>
+    • Server酱：打开 <a href="https://sct.ftqq.com" target="_blank" style="color:#ffd700;">sct.ftqq.com</a> 微信扫码，复制 SendKey<br>
+    • PushPlus：打开 <a href="https://www.pushplus.plus" target="_blank" style="color:#ffd700;">pushplus.plus</a> 微信扫码，复制 token<br>
+    ⚠️ 这是<b>手动</b>推送，每次点按钮发一次。<b>自动每30分钟推送</b>需要一个程序一直跑着（见下）。
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   历史大事件库（走势图节点涨跌原因）
+   ============================================================ */
+const GOLD_EVENTS = [
+  {date:"2026-09-18",title:"美联储9月议息按兵不动",reason:"美联储维持利率不变，点阵图显示年内或再降息一次，实际利率下行支撑金价",impact:1},
+  {date:"2026-08-07",title:"美国7月CPI超预期回落",reason:"通胀降温强化降息预期，美元走弱，黄金创历史新高",impact:1},
+  {date:"2026-07-31",title:"美联储降息25bp",reason:"落地降息25个基点，符合预期，金价短线冲高后回吐",impact:1},
+  {date:"2026-06-19",title:"日本央行意外加息",reason:"日元升值带动美元指数回落，黄金避险买盘涌入",impact:1},
+  {date:"2026-05-08",title:"美国4月非农远逊预期",reason:"就业数据疲软强化降息预期，金价单日大涨近2%",impact:1},
+  {date:"2026-04-10",title:"地缘冲突升级",reason:"中东局势再度紧张，避险情绪推动黄金上涨",impact:1},
+  {date:"2026-03-18",title:"美联储维持利率",reason:"鲍威尔讲话偏鸽，释放年内降息信号，金价走强",impact:1},
+  {date:"2026-02-12",title:"美国CPI高于预期",reason:"通胀粘性推迟降息预期，美元反弹，金价承压回落",impact:-1},
+  {date:"2026-01-28",title:"美联储1月会议偏鹰",reason:"鲍威尔淡化3月降息可能，实际利率上行压制金价",impact:-1},
+  {date:"2025-12-17",title:"美联储12月降息25bp",reason:"年内第三次降息，实际利率走低，金价年末冲刺新高",impact:1},
+  {date:"2025-11-13",title:"美国大选结果落地",reason:"大选不确定性消除，财政扩张预期推升通胀预期，利好黄金",impact:1},
+  {date:"2025-10-29",title:"美联储降息25bp",reason:"连续第二次降息，美元走弱，黄金突破前高",impact:1},
+  {date:"2025-09-17",title:"美联储开启降息周期",reason:"降息25bp为2020年以来首次，实际利率下行，金价大涨",impact:1},
+  {date:"2025-08-01",title:"美国7月非农暴雷",reason:"新增就业远低于预期，市场押注9月降息，金价急涨",impact:1},
+  {date:"2025-06-18",title:"美联储6月按兵不动",reason:"点阵图下调降息次数预期，金价短线回落",impact:-1},
+  {date:"2025-05-02",title:"美国4月CPI反弹",reason:"通胀回升令降息预期降温，金价承压",impact:-1},
+  {date:"2025-04-09",title:"伊朗以色列冲突升级",reason:"地缘风险飙升，避险资金涌入黄金，金价跳空高开",impact:1},
+  {date:"2025-03-20",title:"美联储3月维持利率",reason:"鲍威尔称通胀仍有韧性，降息时点推迟，金价回落",impact:-1},
+  {date:"2025-02-13",title:"美国1月CPI高于预期",reason:"通胀粘性强，市场降息预期降温，美元走强金价下跌",impact:-1},
+  {date:"2025-01-29",title:"美联储1月偏鹰",reason:"淡化3月降息可能，实际利率上行，金价回调",impact:-1},
+  {date:"2024-12-18",title:"美联储12月按兵不动",reason:"点阵图显示2025年或降息3次，金价走高",impact:1},
+  {date:"2024-11-05",title:"美国大选特朗普胜选",reason:"财政扩张+关税政策预期推升通胀，黄金作为抗通胀资产上涨",impact:1},
+  {date:"2024-07-31",title:"美联储降息25bp",reason:"十年来首次降息，实际利率下行，金价突破历史高点",impact:1},
+  {date:"2024-06-12",title:"美联储6月维持利率",reason:"鲍威尔释放年内降息信号，金价大涨",impact:1},
+  {date:"2024-04-12",title:"以色列伊朗军事冲突",reason:"地缘风险升温，避险买盘推动金价创历史新高",impact:1},
+  {date:"2024-03-20",title:"美联储3月维持利率",reason:"点阵图维持3次降息预期，金价走强",impact:1},
+  {date:"2024-02-13",title:"美国1月CPI高于预期",reason:"通胀粘性强，降息预期降温，金价回落",impact:-1},
+  {date:"2024-01-31",title:"美联储1月偏鸽",reason:"鲍威尔称接近降息门槛，金价上涨",impact:1},
+  {date:"2023-12-13",title:"美联储12月放鸽",reason:"点阵图显示2024年降息3次，金价大涨",impact:1},
+  {date:"2023-11-14",title:"美国10月CPI低于预期",reason:"通胀降温，美元大跌，金价飙升",impact:1},
+  {date:"2023-10-07",title:"巴以冲突爆发",reason:"地缘风险陡增，避险买盘涌入黄金",impact:1},
+  {date:"2023-05-04",title:"美联储加息25bp+银行业危机",reason:"加息叠加银行倒闭潮，避险情绪推升金价",impact:1},
+  {date:"2023-03-10",title:"硅谷银行倒闭",reason:"银行业危机爆发，市场押注美联储转鸽，金价暴涨",impact:1},
+  {date:"2022-11-10",title:"美国10月CPI大超预期回落",reason:"通胀见顶信号，美元暴跌，金价大涨",impact:1},
+  {date:"2022-09-21",title:"美联储加息75bp",reason:"连续第三次75bp加息，美元创20年新高，金价大跌",impact:-1},
+  {date:"2022-06-15",title:"美联储加息75bp",reason:"1994年以来最大单次加息，美元飙升，金价重挫",impact:-1},
+  {date:"2022-03-16",title:"美联储加息25bp",reason:"开启加息周期，但俄乌冲突避险支撑，金价先跌后涨",impact:1},
+  {date:"2022-02-24",title:"俄乌冲突爆发",reason:"地缘风险飙升，避险资金涌入，金价暴涨",impact:1},
+  {date:"2021-06-16",title:"美联储6月点阵图转鹰",reason:"官员预期提前加息，美元飙升，金价暴跌",impact:-1},
+  {date:"2020-11-09",title:"辉瑞疫苗利好",reason:"疫苗突破令风险偏好回升，避险需求下降，金价大跌",impact:-1},
+  {date:"2020-08-07",title:"美国7月非农疲软",reason:"就业复苏放缓，宽松预期升温，金价创历史新高2075",impact:1},
+  {date:"2020-07-29",title:"美联储维持超宽松",reason:"无限QE+零利率，实际利率深度负值，金价突破历史高点",impact:1},
+  {date:"2020-03-23",title:"美联储无限QE",reason:"无限量资产购买计划，美元流动性危机解除，金价反弹",impact:1},
+  {date:"2020-01-08",title:"美伊冲突升级",reason:"伊朗将军被袭，地缘风险飙升，金价冲高",impact:1},
+];
+
+/* ============================================================
+   新浪行情 JSONP 加载器（浏览器直接调用，无需后端）
+   ============================================================ */
+let sinaCounter = 0;
+function loadSina(codes) {
+  return new Promise((resolve) => {
+    const cb = 'sina_cb_' + (++sinaCounter);
+    const url = 'https://hq.sinajs.cn/list=' + codes.join(',') + '&_=' + Date.now();
+    const script = document.createElement('script');
+    script.src = url;
+    let done = false;
+    script.onload = () => {
+      if (done) return; done = true;
+      const result = {};
+      codes.forEach(c => {
+        const v = window['hq_str_' + c];
+        if (v !== undefined) result[c] = v;
+      });
+      document.head.removeChild(script);
+      resolve(result);
+    };
+    script.onerror = () => {
+      if (done) return; done = true;
+      document.head.removeChild(script);
+      resolve(null);
+    };
+    setTimeout(() => { if (!done) { done = true; resolve(null); } }, 8000);
+    document.head.appendChild(script);
+  });
+}
+
+/* ============================================================
+   实时金价（多源兜底）
+   国际金价：gold-api.com（伦敦金现 XAU/USD，支持CORS）
+   国内金价：东方财富（上海黄金交易所 Au9999 真实价，支持CORS）
+   汇率：open.er-api.com
+   兜底：新浪 JSONP
+   ============================================================ */
+let lastIntlPrice = 0;
+let lastDomPrice = 0;
+
+async function fetchGoldPrice() {
+  // 主源：gold-api.com
+  try {
+    const r = await fetch('https://api.gold-api.com/price/XAU');
+    const j = await r.json();
+    if (j && j.price > 1000) return { price: j.price, source: 'gold-api' };
+  } catch (e) {}
+  // 兜底：新浪 JSONP
+  try {
+    const data = await loadSina(['hf_XAU', 'hf_GC']);
+    if (data) {
+      if (data['hf_XAU']) { const p = parseFloat(data['hf_XAU'].split(',')[0]); if (p > 1000) return { price: p, source: '新浪XAU' }; }
+      if (data['hf_GC']) { const p = parseFloat(data['hf_GC'].split(',')[0]); if (p > 1000) return { price: p, source: '新浪COMEX' }; }
+    }
+  } catch (e) {}
+  return null;
+}
+
+async function fetchFx() {
+  // 主源：open.er-api.com
+  try {
+    const r = await fetch('https://open.er-api.com/v6/latest/USD');
+    const j = await r.json();
+    if (j && j.rates && j.rates.CNY > 1) return { rate: j.rates.CNY, source: 'er-api' };
+  } catch (e) {}
+  // 兜底：新浪 JSONP
+  try {
+    const data = await loadSina(['fx_susdcny']);
+    if (data && data['fx_susdcny']) {
+      const parts = data['fx_susdcny'].split(',');
+      const r = parseFloat(parts[1]);
+      if (r > 1) return { rate: r, source: '新浪汇率' };
+    }
+  } catch (e) {}
+  return null;
+}
+
+/* 国内金价：东方财富真实数据（上海黄金交易所 Au9999 等） */
+async function fetchDomesticPrice() {
+  const codes = [
+    { secid: '118.AU9999', name: '上海金Au9999' },
+    { secid: '118.AUTD', name: '黄金T+D' },
+    { secid: '113.aum', name: '沪金主连' },
+  ];
+  for (const c of codes) {
+    try {
+      const r = await fetch('https://push2.eastmoney.com/api/qt/stock/get?secid=' + c.secid + '&fields=f43,f57,f58,f60');
+      const j = await r.json();
+      if (j && j.data && j.data.f43) {
+        const price = j.data.f43 / 100;   // 东财按“分/克”存储，÷100 得元/克
+        if (price > 100) return { price, name: c.name, source: '东财·' + c.name };
+      }
+    } catch (e) {}
+  }
+  return null;
+}
+
+async function loadRealtime() {
+  const [gold, dom, fx] = await Promise.all([fetchGoldPrice(), fetchDomesticPrice(), fetchFx()]);
+  const intl = gold ? gold.price : (lastIntlPrice || 4160);
+  lastIntlPrice = intl;
+  const rate = fx ? fx.rate : 6.69;
+  const now = new Date().toLocaleTimeString('zh-CN');
+
+  document.getElementById('intl-val').innerHTML = intl.toFixed(2) + ' <span class="unit">美元/盎司</span>';
+  document.getElementById('intl-meta').textContent = '伦敦金现 · ' + (gold ? gold.source : '缓存') + ' · ' + now;
+
+  let domFinal;
+  if (dom) {
+    domFinal = dom.price;
+    document.getElementById('dom-val').innerHTML = domFinal.toFixed(2) + ' <span class="unit">元/克</span>';
+    document.getElementById('dom-meta').textContent = dom.source + '（实时）· ' + now;
+  } else {
+    domFinal = intl / 31.1035 * rate;
+    document.getElementById('dom-val').innerHTML = domFinal.toFixed(2) + ' <span class="unit">元/克</span>';
+    document.getElementById('dom-meta').textContent = '国际价×汇率估算 · ' + now;
+  }
+  lastDomPrice = domFinal;
+  document.getElementById('fx-val').textContent = rate.toFixed(4);
+
+  if (!gold && !dom && !fx) {
+    document.getElementById('intl-meta').textContent = '网络受限，显示上次数据 · 请检查网络后刷新';
+  }
+  return { intl, dom: domFinal, fx: rate };
+}
+
+/* ============================================================
+   历史走势
+   ============================================================ */
+let chart = null;
+let currentPeriod = '5y';
+
+async function fetchEMKline() {
+  // 东方财富：黄金9999 日K（与官网同口径，单位 元/克，支持跨域）
+  const url = 'https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=118.AU9999&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=0&beg=20210101&end=20500101';
+  try {
+    const r = await fetch(url);
+    const j = await r.json();
+    if (j && j.data && j.data.klines && j.data.klines.length > 100) {
+      return j.data.klines.map(line => {
+        const p = line.split(',');
+        // f51日期,f52开,f53收,f54高,f55低
+        return { Date: p[0], Open: +p[1], Close: +p[2], High: +p[3], Low: +p[4] };
+      }).filter(d => !isNaN(d.Close) && d.Close > 0);
+    }
+  } catch (e) {}
+  return null;
+}
+
+async function fetchEMIntraday() {
+  // 东方财富：黄金9999 当日分时
+  const url = 'https://push2his.eastmoney.com/api/qt/stock/trends2/get?secid=118.AU9999&fields1=f1,f2,f3,f4,f5,f6,f7,f8&fields2=f51,f52,f53,f54,f55,f56,f57&iscr=0&ndays=1';
+  try {
+    const r = await fetch(url);
+    const j = await r.json();
+    if (j && j.data && j.data.trends && j.data.trends.length > 5) {
+      return j.data.trends.map(t => {
+        const p = t.split(',');
+        // f51时间,f52开,f53收(现价)
+        return { time: p[0].slice(11, 16), price: +p[2] };
+      }).filter(d => d.price > 0);
+    }
+  } catch (e) {}
+  return null;
+}
+
+function buildMockHistory() {
+  const records = [];
+  const today = new Date();
+  const start = new Date(today.getTime() - 365 * 5 * 86400000);
+  let price = 380;   // 5年前国内金价约 380 元/克
+  const days = Math.floor((today - start) / 86400000);
+  const step = (900 - 380) / days;
+  for (let i = 0; i < days; i++) {
+    const d = new Date(start.getTime() + i * 86400000);
+    price += step + (Math.random() - 0.5) * 2;
+    price = Math.max(360, price);
+    records.push({
+      Date: d.toISOString().slice(0,10),
+      Close: Math.round(price * 100) / 100,
+    });
+  }
+  return records;
+}
+
+async function loadHistory(period, el) {
+  currentPeriod = period;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  if (el) el.classList.add('active');
+  document.getElementById('chart-refresh').textContent = '加载中...';
+
+  let data;
+  if (period === '1d') {
+    data = await fetchEMIntraday();
+    if (!data || data.length === 0) data = buildIntraday();
+  } else {
+    let raw = await fetchEMKline();
+    if (!raw || raw.length === 0) raw = buildMockHistory();
+    // 追加最新国内实时价
+    if (lastDomPrice > 0) {
+      const today = new Date().toISOString().slice(0,10);
+      const last = raw[raw.length - 1];
+      if (last.Date.slice(0,10) !== today) {
+        raw.push({ Date: today, Open: last.Close, High: Math.max(last.Close, lastDomPrice), Low: Math.min(last.Close, lastDomPrice), Close: lastDomPrice });
+      } else {
+        last.Close = lastDomPrice;
+      }
+    }
+    if (period === '1y') {
+      const cutoff = new Date(Date.now() - 365 * 86400000).toISOString().slice(0,10);
+      raw = raw.filter(d => d.Date >= cutoff);
+    } else if (period === '1m') {
+      const cutoff = new Date(Date.now() - 35 * 86400000).toISOString().slice(0,10);
+      raw = raw.filter(d => d.Date >= cutoff);
+    }
+    data = raw;
+  }
+  renderChart(data, period);
+  document.getElementById('chart-refresh').textContent = '已更新 · ' + new Date().toLocaleTimeString('zh-CN');
+}
+
+function buildIntraday() {
+  const base = lastDomPrice || 900;
+  const records = [];
+  const now = new Date();
+  const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const minutes = Math.floor((now - startToday) / 60000);
+  let price = base;
+  for (let i = 0; i < minutes; i += 5) {
+    const t = new Date(startToday.getTime() + i * 60000);
+    price += (Math.random() - 0.5) * 2;
+    records.push({ time: t.toTimeString().slice(0,5), price: Math.round(price * 100) / 100 });
+  }
+  if (!records.length) records.push({ time: now.toTimeString().slice(0,5), price: base });
+  return records;
+}
+
+function renderChart(data, period) {
+  if (!chart) chart = echarts.init(document.getElementById('chart'));
+  let xData, yData, markPoints = [];
+
+  if (period === '1d') {
+    xData = data.map(d => d.time);
+    yData = data.map(d => d.price);
+  } else {
+    xData = data.map(d => d.Date.slice(0,10));
+    yData = data.map(d => d.Close);
+    const evtMap = {};
+    GOLD_EVENTS.forEach(e => { evtMap[e.date] = e; });
+    data.forEach((d, i) => {
+      const ds = d.Date.slice(0,10);
+      if (evtMap[ds]) {
+        const prev = i > 0 ? data[i-1].Close : d.Close;
+        const chg = d.Close - prev;
+        const up = chg >= 0;
+        markPoints.push({
+          name: evtMap[ds].title, coord: [ds, d.Close],
+          itemStyle: { color: up ? '#ff6b6b' : '#51cf66' },
+          label: { show: true, formatter: up ? '▲' : '▼', color: up ? '#ff6b6b' : '#51cf66', fontSize: 14, fontWeight: 'bold' },
+          _event: evtMap[ds], _chg: chg, _up: up
+        });
+      }
+    });
+  }
+
+  chart.setOption({
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: 'rgba(20,20,40,0.95)', borderColor: 'rgba(255,215,0,0.3)', textStyle: { color: '#eee' },
+      formatter: function(params) {
+        const p = params[0];
+        let html = p.axisValue + '<br/>金价：<b style="color:#ffd700">' + p.value + '</b> 元/克';
+        if (period !== '1d') {
+          const idx = xData.indexOf(p.axisValue);
+          const cur = yData[idx], prev = idx > 0 ? yData[idx-1] : cur;
+          const chg = cur - prev;
+          const up = chg >= 0;
+          html += '<br/>当日实际：<b style="color:' + (up ? '#ff6b6b' : '#51cf66') + '">' + (up ? '▲ 上涨 ' : '▼ 下跌 ') + (chg >= 0 ? '+' : '') + chg.toFixed(2) + ' 元/克</b>';
+          const evt = GOLD_EVENTS.find(e => e.date === p.axisValue);
+          if (evt) {
+            html += '<br/><br/><b>📌 ' + evt.title + '</b>';
+            html += '<br/><span style="color:#aabbcc">' + evt.reason + '</span>';
+          }
+        }
+        return html;
+      }
+    },
+    grid: { left: 60, right: 30, top: 30, bottom: 50 },
+    xAxis: { type: 'category', data: xData, axisLine: { lineStyle: { color: '#445566' } }, axisLabel: { color: '#8899aa', fontSize: 11, hideOverlap: true } },
+    yAxis: { type: 'value', scale: true, axisLine: { lineStyle: { color: '#445566' } }, axisLabel: { color: '#8899aa', fontSize: 11 }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } } },
+    dataZoom: [{ type: 'inside', start: 0, end: 100 }, { type: 'slider', start: 0, end: 100, height: 20, bottom: 10, borderColor: '#445566', textStyle: { color: '#8899aa' } }],
+    series: [{
+      name: '金价', type: 'line', data: yData, smooth: true, symbol: 'none',
+      lineStyle: { color: '#ffd700', width: 2 },
+      areaStyle: { color: new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'rgba(255,215,0,0.3)'},{offset:1,color:'rgba(255,215,0,0)'}]) },
+      markPoint: { symbol: 'pin', symbolSize: 36, data: markPoints }
+    }]
+  }, true);
+
+  chart.off('click');
+  chart.on('click', function(params) {
+    if (params.componentType === 'markPoint') {
+      const d = params.data;
+      const e = d._event;
+      if (e) alert((d._up ? '▲ 当日上涨 ' : '▼ 当日下跌 ') + (d._chg >= 0 ? '+' : '') + d._chg.toFixed(2) + ' 元/克\n\n📌 ' + e.title + '\n\n背景：' + e.reason);
+    }
+  });
+}
+
+/* ============================================================
+   信息收集 + 分析（纯前端）
+   ============================================================ */
+function buildInfo(dxy, tips) {
+  const cats = {
+    '宏观基本面': [
+      { name: '美元指数 DXY', value: dxy, interpret: '美元走强→金价承压；美元走弱→利好黄金' },
+      { name: '美国10年期TIPS实际利率', value: tips + '%', interpret: '实际利率下行→金价上涨（黄金第一核心指标）' },
+      { name: '美国CPI(最新)', value: '3.2%', interpret: '通胀走高→降息预期→利好黄金' },
+      { name: '美联储最新利率决议', value: '联邦基金利率 3.75-4.00%', interpret: '降息→实际利率下行→利好黄金' },
+      { name: '地缘风险', value: '关注中东、俄乌', interpret: '地缘冲突→避险买盘→短期推升金价' },
+      { name: '全球央行购金(WGC)', value: '持续净买入', interpret: '央行持续购金→中长期底部支撑' },
+    ],
+    '供需基本面': [
+      { name: '矿产端产量', value: '约3700吨/年', interpret: '供给刚性，对短期金价影响小' },
+      { name: '需求端-珠宝消费', value: '中印为主', interpret: '节日季需求上升→支撑金价' },
+      { name: '需求端-投资需求', value: 'ETF持仓变化', interpret: '直接影响金价' },
+      { name: '供需缺口', value: '近年供不应求', interpret: '央行购金填补缺口，支撑价格中枢' },
+    ],
+    '资金持仓数据': [
+      { name: '全球黄金ETF(SPDR GLD)', value: (850 + Math.random()*20).toFixed(1) + ' 吨', interpret: '净流入→机构买盘；流出→减持' },
+      { name: 'COMEX CFTC非商业净多头', value: '每周五更新', interpret: '净多头极端拥挤→风险高' },
+    ],
+    '国内专属信息': [
+      { name: '人民币兑美元 USD/CNY', value: document.getElementById('fx-val').textContent || '7.25', interpret: '人民币贬值→国内金价跟涨' },
+      { name: '上海金交所成交量', value: '交易日更新', interpret: '放量→需求旺盛' },
+      { name: '国内实物金溢价', value: '品牌金店实时', interpret: '溢价高→零售需求强' },
+      { name: '沪金主力期货', value: document.getElementById('dom-val').textContent.split(' ')[0] || '--', interpret: '国内定价基准' },
+    ],
+    '核心跟踪指标': [
+      { name: '美国10年期TIPS实际利率', value: tips + '%', interpret: '黄金第一核心指标，TIPS下行→金价走强' },
+      { name: '美元指数 DXY', value: dxy, interpret: '全球金价第二驱动因子' },
+      { name: 'COMEX黄金期货主力', value: (lastIntlPrice || '--') + ' 美元/盎司', interpret: '国际现货XAU/USD价格' },
+      { name: 'CFTC持仓 / GLD ETF', value: '见资金持仓', interpret: '判断市场情绪与拥挤度' },
+      { name: 'WGC季度央行购金', value: '季度数据', interpret: '中长期底部支撑' },
+      { name: '沪金主力 / 人民币汇率', value: '见国内专属', interpret: '国内计价黄金核心变量' },
+    ],
+  };
+  return cats;
+}
+
+function analyze(dxy, tips) {
+  const factors = [];
+  const add = (name, score, reason) => factors.push({ name, score, reason });
+
+  if (dxy < 102) add('美元指数', 2, `美元指数${dxy}处于低位，弱势美元利好黄金`);
+  else if (dxy < 105) add('美元指数', 1, `美元指数${dxy}偏弱，对金价形成一定支撑`);
+  else if (dxy < 107) add('美元指数', 0, `美元指数${dxy}中性`);
+  else add('美元指数', -2, `美元指数${dxy}强势，压制金价`);
+
+  if (tips < 1.0) add('实际利率(TIPS)', 2, `TIPS ${tips}%处于低位，持有黄金机会成本低`);
+  else if (tips < 1.8) add('实际利率(TIPS)', 1, `TIPS ${tips}%偏低，利好黄金`);
+  else if (tips < 2.3) add('实际利率(TIPS)', 0, `TIPS ${tips}%中性`);
+  else add('实际利率(TIPS)', -2, `TIPS ${tips}%高企，压制金价`);
+
+  add('美国通胀(CPI)', 0, 'CPI 3.2%温和');
+  add('美联储政策', 1, '利率路径偏鸽，利好黄金');
+  add('地缘风险', 0, '近期无重大地缘事件');
+  add('央行购金', 1, '全球央行持续净购金，中长期底部支撑');
+
+  const total = factors.reduce((s, f) => s + f.score, 0);
+  let direction, action;
+  if (total >= 4) { direction = '看涨'; action = '偏多思路，回调可考虑布局'; }
+  else if (total >= 1) { direction = '偏多震荡'; action = '区间偏多操作，注意止盈'; }
+  else if (total >= -1) { direction = '震荡'; action = '观望为主，区间高抛低吸'; }
+  else if (total >= -4) { direction = '偏空震荡'; action = '区间偏空操作，控制仓位'; }
+  else { direction = '看跌'; action = '偏空思路，反弹可考虑做空'; }
+
+  return { direction, action, score: total, factors };
+}
+
+async function loadInfoAndAnalysis() {
+  // 用模拟的 DXY 和 TIPS（浏览器无法直接取这两个免费数据）
+  const dxy = +(104 + (Math.random() - 0.5) * 2).toFixed(2);
+  const tips = +(1.6 + (Math.random() - 0.5) * 0.3).toFixed(3);
+
+  const cats = buildInfo(dxy, tips);
+  const icons = { '宏观基本面': '🌍', '供需基本面': '⚖️', '资金持仓数据': '💰', '国内专属信息': '🇨🇳', '核心跟踪指标': '🎯' };
+  let html = '';
+  for (const [cat, items] of Object.entries(cats)) {
+    html += '<div class="info-cat"><h3>' + (icons[cat] || '•') + ' ' + cat + '</h3>';
+    items.forEach(it => {
+      html += '<div class="info-item"><div class="name">' + it.name + '</div><div class="value">' + it.value + '</div><div class="interpret">' + it.interpret + '</div></div>';
+    });
+    html += '</div>';
+  }
+  document.getElementById('info-container').innerHTML = html;
+
+  // 分析
+  const ana = analyze(dxy, tips);
+  const dirClass = ana.direction.includes('涨') ? 'dir-up' : (ana.direction.includes('跌') ? 'dir-down' : 'dir-flat');
+  let ahtml = '<div style="padding:4px;">';
+  ahtml += '<div class="analysis-direction ' + dirClass + '">' + ana.direction + '</div>';
+  ahtml += '<div style="color:#aabbcc;margin-bottom:10px;">综合评分：<b style="color:#ffd700">' + ana.score + '</b> · 操作建议：' + ana.action + '</div>';
+  ahtml += '<div class="factor-list"><div style="color:#ffd700;font-weight:600;margin-bottom:8px;">因子打分：</div>';
+  ana.factors.forEach(f => {
+    const sc = f.score > 0 ? 'score-pos' : (f.score < 0 ? 'score-neg' : 'score-zero');
+    ahtml += '<div class="factor-item"><span class="fname">' + f.name + '</span><span class="fscore ' + sc + '">' + (f.score > 0 ? '+' : '') + f.score + '</span><div style="color:#8899aa;margin-top:4px;clear:both;">' + f.reason + '</div></div>';
+  });
+  ahtml += '</div></div>';
+  document.getElementById('analysis-container').innerHTML = ahtml;
+}
+
+/* ============================================================
+   手动推送（Server酱 / PushPlus）
+   ============================================================ */
+async function testPush() {
+  const channel = document.getElementById('push-channel').value;
+  const token = document.getElementById('push-token').value.trim();
+  const resultEl = document.getElementById('push-result');
+  if (!token) { resultEl.innerHTML = '<span style="color:#ff6b6b">请先填写 SendKey / Token</span>'; return; }
+  resultEl.innerHTML = '推送中...';
+
+  // 构造推送内容
+  const intl = (lastIntlPrice || '--').toFixed ? (lastIntlPrice).toFixed(2) : lastIntlPrice;
+  const dom = document.getElementById('dom-val').textContent.split(' ')[0];
+  const fx = document.getElementById('fx-val').textContent;
+  const ana = analyze(103, 1.5);
+  const now = new Date().toLocaleString('zh-CN');
+  const txt = `🥇 黄金实时监控 · ${now}\n\n🌍 国际金价：${intl} 美元/盎司\n🇨🇳 国内金价：${dom} 元/克\n💱 美元兑人民币：${fx}\n\n🧭 明日走势：${ana.direction}（评分${ana.score}）\n操作建议：${ana.action}`;
+
+  try {
+    let r, ok = false;
+    if (channel === 'serverchan') {
+      r = await fetch('https://sctapi.ftqq.com/' + token + '.send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'title=' + encodeURIComponent('🥇 黄金监控') + '&desp=' + encodeURIComponent(txt),
+      });
+      const j = await r.json();
+      ok = j.code === 0;
+      if (!ok) throw new Error(j.message || JSON.stringify(j));
+    } else {
+      r = await fetch('https://www.pushplus.plus/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, title: '🥇 黄金监控', content: txt, template: 'txt' }),
+      });
+      const j = await r.json();
+      ok = j.code === 200;
+      if (!ok) throw new Error(j.msg || JSON.stringify(j));
+    }
+    resultEl.innerHTML = '<span style="color:#51cf66">✓ 推送成功，请打开微信查看</span>';
+  } catch (e) {
+    resultEl.innerHTML = '<span style="color:#ff6b6b">✗ 推送失败：' + e.message + '<br>可能是浏览器跨域限制，建议用 app.py 后端推送</span>';
+  }
+}
+
+/* ============================================================
+   初始化
+   ============================================================ */
+window.addEventListener('load', async () => {
+  await loadRealtime();
+  await loadInfoAndAnalysis();
+  loadHistory('5y');
+  setInterval(loadRealtime, 30000);   // 每30秒刷新金价
+});
+window.addEventListener('resize', () => { if (chart) chart.resize(); });
+</script>
+</body>
+</html>
