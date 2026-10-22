@@ -1,0 +1,92 @@
+name: 黄金监控（自动推送 + 部署网页）
+
+on:
+  schedule:
+    # 每30分钟推送一次（UTC时间，北京时间=UTC+8，此配置覆盖全天）
+    - cron: '*/30 * * * *'
+  push:
+    branches: [ main ]
+  workflow_dispatch:  # 允许手动触发测试
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  # ========== 任务1：自动推送到微信（电脑关机也能推）==========
+  push_wechat:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: 拉取金价 + 汇率
+        id: data
+        run: |
+          PRICE=$(curl -s https://api.gold-api.com/price/XAU | python3 -c "import sys,json; print(json.load(sys.stdin)['price'])")
+          FX=$(curl -s https://open.er-api.com/v6/latest/USD | python3 -c "import sys,json; print(json.load(sys.stdin)['rates']['CNY'])")
+          DOM=$(python3 -c "print(round($PRICE / 31.1035 * $FX * 1.03, 2))")
+          echo "price=$PRICE" >> $GITHUB_OUTPUT
+          echo "fx=$FX" >> $GITHUB_OUTPUT
+          echo "dom=$DOM" >> $GITHUB_OUTPUT
+          echo "✅ 国际金价: $PRICE 美元/盎司 | 国内金价: $DOM 元/克 | 汇率: $FX"
+
+      - name: 推送到微信（Server酱）
+        env:
+          SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}
+        run: |
+          if [ -z "$SENDKEY" ]; then echo "⏭️ 未配置 SERVERCHAN_SENDKEY，跳过"; exit 0; fi
+          TIME=$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M')
+          python3 - <<'PYEOF'
+          import os, urllib.parse, urllib.request
+          price, dom, fx = "${{ steps.data.outputs.price }}", "${{ steps.data.outputs.dom }}", "${{ steps.data.outputs.fx }}"
+          time_str = os.popen("TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M'").read().strip()
+          title = f"🥇 黄金监控 · {time_str}"
+          desp = f"🌍 国际金价：{price} 美元/盎司\n🇨🇳 国内金价：{dom} 元/克\n💱 美元兑人民币：{fx}"
+          data = urllib.parse.urlencode({"title": title, "desp": desp}).encode()
+          url = f"https://sctapi.ftqq.com/{os.environ['SENDKEY']}.send"
+          urllib.request.urlopen(url, data=data, timeout=15)
+          print("✅ Server酱推送成功")
+          PYEOF
+
+      - name: 推送到微信（PushPlus）
+        env:
+          TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then echo "⏭️ 未配置 PUSHPLUS_TOKEN，跳过"; exit 0; fi
+          python3 - <<'PYEOF'
+          import os, json, urllib.request
+          price, dom, fx = "${{ steps.data.outputs.price }}", "${{ steps.data.outputs.dom }}", "${{ steps.data.outputs.fx }}"
+          time_str = os.popen("TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M'").read().strip()
+          content = f"🥇 黄金实时监控 · {time_str}\n\n🌍 国际金价：{price} 美元/盎司\n🇨🇳 国内金价：{dom} 元/克\n💱 美元兑人民币：{fx}"
+          body = json.dumps({"token": os.environ['TOKEN'], "title": "🥇 黄金监控", "content": content, "template": "txt"}).encode()
+          req = urllib.request.Request("https://www.pushplus.plus/send", data=body, headers={"Content-Type": "application/json"})
+          urllib.request.urlopen(req, timeout=15)
+          print("✅ PushPlus推送成功")
+          PYEOF
+
+  # ========== 任务2：部署网页到 GitHub Pages（手机随时可看）==========
+  deploy_pages:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: 准备部署文件
+        run: |
+          mkdir -p public
+          cp 黄金监控台.html public/index.html
+      - name: 配置 Pages
+        uses: actions/configure-pages@v5
+      - name: 上传产物
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+      - name: 部署
+        id: deployment
+        uses: actions/deploy-pages@v4

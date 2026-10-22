@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🥇 黄金监控台</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    color: #e8e8e8;
+    min-height: 100vh;
+    padding: 16px;
+  }
+  .header {
+    text-align: center;
+    padding: 18px 0 24px;
+  }
+  .header h1 {
+    font-size: 1.7rem;
+    background: linear-gradient(90deg, #ffd700, #ff8c00);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 6px;
+  }
+  .header .sub { color: #8899aa; font-size: 0.85rem; }
+
+  /* 实时金价卡片 */
+  .price-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+  .price-card {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,215,0,0.25);
+    border-radius: 14px;
+    padding: 18px;
+    backdrop-filter: blur(10px);
+  }
+  .price-card .label { font-size: 0.8rem; color: #8899aa; margin-bottom: 8px; }
+  .price-card .value {
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: #ffd700;
+    font-family: "SF Mono", Consolas, monospace;
+  }
+  .price-card .unit { font-size: 0.9rem; color: #aaa; margin-left: 6px; }
+  .price-card .meta { font-size: 0.72rem; color: #667788; margin-top: 6px; }
+  .price-card.up .value { color: #ff6b6b; }
+  .price-card.down .value { color: #51cf66; }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+  .tab {
+    padding: 8px 16px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: #aabbcc;
+    transition: all 0.2s;
+  }
+  .tab.active {
+    background: linear-gradient(90deg, #ffd700, #ff8c00);
+    color: #1a1a2e;
+    font-weight: 600;
+    border-color: transparent;
+  }
+
+  .card {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 14px;
+    padding: 18px;
+    margin-bottom: 18px;
+  }
+  .card-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #ffd700;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #chart { width: 100%; height: 420px; }
+
+  /* 信息收集 */
+  .info-section { margin-bottom: 18px; }
+  .info-cat {
+    background: rgba(255,255,255,0.04);
+    border-left: 3px solid #ffd700;
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+  }
+  .info-cat h3 { color: #ffd700; font-size: 0.95rem; margin-bottom: 10px; }
+  .info-item {
+    display: grid;
+    grid-template-columns: 1fr 1.5fr 2fr;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    font-size: 0.82rem;
+  }
+  .info-item:last-child { border-bottom: none; }
+  .info-item .name { color: #ccd; }
+  .info-item .value { color: #ffd700; font-weight: 600; word-break: break-all; }
+  .info-item .interpret { color: #8899aa; }
+
+  /* 分析区 */
+  .analysis-box { background: rgba(255,255,255,0.04); border-radius: 10px; padding: 16px; }
+  .analysis-direction {
+    display: inline-block;
+    padding: 6px 18px;
+    border-radius: 20px;
+    font-size: 1.3rem;
+    font-weight: 700;
+    margin-bottom: 12px;
+  }
+  .dir-up { background: rgba(255,107,107,0.2); color: #ff6b6b; }
+  .dir-down { background: rgba(81,207,102,0.2); color: #51cf66; }
+  .dir-flat { background: rgba(255,215,0,0.2); color: #ffd700; }
+  .factor-list { margin-top: 14px; }
+  .factor-item {
+    padding: 10px 12px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    font-size: 0.85rem;
+  }
+  .factor-item .fname { color: #ffd700; font-weight: 600; }
+  .factor-item .fscore {
+    float: right;
+    font-weight: 700;
+  }
+  .score-pos { color: #ff6b6b; }
+  .score-neg { color: #51cf66; }
+  .score-zero { color: #aaa; }
+
+  /* 推送区 */
+  .push-box {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .btn {
+    padding: 9px 18px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: all 0.2s;
+  }
+  .btn-primary {
+    background: linear-gradient(90deg, #ffd700, #ff8c00);
+    color: #1a1a2e;
+  }
+  .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+  .btn-ghost {
+    background: rgba(255,255,255,0.1);
+    color: #ddd;
+    border: 1px solid rgba(255,255,255,0.2);
+  }
+  .status-dot {
+    display: inline-block;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    margin-right: 6px;
+  }
+  .status-on { background: #51cf66; box-shadow: 0 0 8px #51cf66; }
+  .status-off { background: #ff6b6b; }
+
+  .refresh-tip { font-size: 0.75rem; color: #667788; text-align: right; }
+
+  @media (max-width: 600px) {
+    .info-item { grid-template-columns: 1fr; }
+    .price-card .value { font-size: 1.6rem; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🥇 黄金监控台</h1>
+  <div class="sub">实时金价 · 多周期走势 · 信息收集 · 智能分析 · 微信群定时推送</div>
+</div>
+
+<!-- 实时金价 -->
+<div class="price-grid">
+  <div class="price-card" id="card-intl">
+    <div class="label">🌍 国际金价 XAU/USD</div>
+    <div class="value">-- <span class="unit">美元/盎司</span></div>
+    <div class="meta" id="intl-meta">加载中...</div>
+  </div>
+  <div class="price-card" id="card-dom">
+    <div class="label">🇨🇳 国内金价 沪金</div>
+    <div class="value">-- <span class="unit">元/克</span></div>
+    <div class="meta" id="dom-meta">加载中...</div>
+  </div>
+  <div class="price-card">
+    <div class="label">💱 美元兑人民币</div>
+    <div class="value" id="fx-val">--</div>
+    <div class="meta">国内金价 = 国际金价 × 汇率 × (1+溢价)</div>
+  </div>
+</div>
+
+<!-- 走势图 -->
+<div class="card">
+  <div class="card-title">📈 黄金走势图 <span style="font-size:0.72rem;color:#667788;font-weight:normal;margin-left:auto;" id="chart-tip">点击节点查看涨跌原因</span></div>
+  <div class="tabs">
+    <div class="tab active" data-period="5y" onclick="loadHistory('5y', this)">近5年</div>
+    <div class="tab" data-period="1y" onclick="loadHistory('1y', this)">近1年</div>
+    <div class="tab" data-period="1m" onclick="loadHistory('1m', this)">近1月</div>
+    <div class="tab" data-period="1d" onclick="loadHistory('1d', this)">当天分时</div>
+  </div>
+  <div id="chart"></div>
+  <div class="refresh-tip" id="chart-refresh">数据自动刷新中</div>
+</div>
+
+<!-- 信息收集 -->
+<div class="card">
+  <div class="card-title">📰 黄金信息收集</div>
+  <div id="info-container"><div style="color:#667788;text-align:center;padding:20px;">加载中...</div></div>
+</div>
+
+<!-- 走势分析 -->
+<div class="card">
+  <div class="card-title">🧭 次日走势分析</div>
+  <div id="analysis-container"><div style="color:#667788;text-align:center;padding:20px;">加载中...</div></div>
+</div>
+
+<!-- 推送 -->
+<div class="card">
+  <div class="card-title">📤 微信群定时推送</div>
+  <div class="push-box">
+    <div id="push-status" style="font-size:0.85rem;">检查推送状态中...</div>
+  </div>
+  <div class="push-box" style="margin-top:12px;">
+    <button class="btn btn-primary" onclick="testPush()">立即推送一次（测试）</button>
+    <button class="btn btn-ghost" onclick="refreshAll()">🔄 刷新全部数据</button>
+  </div>
+  <div style="margin-top:12px;font-size:0.78rem;color:#8899aa;">
+    💡 推送内容：实时金价 + 核心指标 + 次日走势分析。每30分钟自动推送到企业微信群。在 config.py 里填写 Webhook 地址即可启用。
+  </div>
+  <div id="push-result" style="margin-top:10px;font-size:0.85rem;"></div>
+</div>
+
+<script>
+let chart = null;
+let chartEvents = [];
+let currentPeriod = '5y';
+
+// ============ 实时金价 ============
+async function loadRealtime() {
+  try {
+    const r = await fetch('/api/realtime');
+    const d = await r.json();
+    const intl = d.international, dom = d.domestic;
+
+    const intlEl = document.querySelector('#card-intl .value');
+    const domEl = document.querySelector('#card-dom .value');
+    intlEl.innerHTML = intl.price + ' <span class="unit">' + intl.unit + '</span>';
+    domEl.innerHTML = dom.price + ' <span class="unit">' + dom.unit + '</span>';
+    document.getElementById('intl-meta').textContent = intl.source + ' · ' + intl.time;
+    document.getElementById('dom-meta').textContent = dom.source + ' · ' + dom.time;
+    document.getElementById('fx-val').textContent = d.usd_cny;
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+// ============ 走势图 ============
+async function loadHistory(period, el) {
+  currentPeriod = period;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  if (el) el.classList.add('active');
+
+  document.getElementById('chart-refresh').textContent = '加载中...';
+
+  try {
+    const [rHist, rEvt] = await Promise.all([
+      fetch('/api/history?period=' + period),
+      fetch('/api/events?start=2020-01-01&end=' + new Date().toISOString().slice(0,10))
+    ]);
+    const hist = await rHist.json();
+    const evt = await rEvt.json();
+    chartEvents = evt.events || [];
+    renderChart(hist);
+    document.getElementById('chart-refresh').textContent = '已更新 · ' + new Date().toLocaleTimeString('zh-CN');
+  } catch (e) {
+    console.error(e);
+    document.getElementById('chart-refresh').textContent = '加载失败';
+  }
+}
+
+function renderChart(hist) {
+  if (!chart) chart = echarts.init(document.getElementById('chart'));
+  const data = hist.data || [];
+  let xData, yData, markPoints = [];
+
+  if (hist.period === '1d') {
+    xData = data.map(d => d.time);
+    yData = data.map(d => d.price);
+  } else {
+    xData = data.map(d => String(d.Date).slice(0, 10));
+    yData = data.map(d => d.Close);
+  }
+
+  // 标注事件点
+  if (hist.period !== '1d') {
+    const evtMap = {};
+    chartEvents.forEach(e => { evtMap[e.date] = e; });
+    data.forEach((d, i) => {
+      const ds = String(d.Date).slice(0, 10);
+      if (evtMap[ds]) {
+        // 按当日实际涨跌（收盘价 - 前一日收盘价）决定标记方向
+        const prev = i > 0 ? data[i - 1].Close : d.Close;
+        const chg = d.Close - prev;
+        const up = chg >= 0;
+        markPoints.push({
+          name: evtMap[ds].title,
+          coord: [ds, d.Close],
+          value: up ? '▲' : '▼',
+          itemStyle: { color: up ? '#ff6b6b' : '#51cf66' },
+          label: { show: true, formatter: up ? '▲' : '▼', color: up ? '#ff6b6b' : '#51cf66', fontSize: 14, fontWeight: 'bold' },
+          _event: evtMap[ds], _chg: chg, _up: up
+        });
+      }
+    });
+  }
+
+  const option = {
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: 'rgba(20,20,40,0.95)',
+      borderColor: 'rgba(255,215,0,0.3)',
+      textStyle: { color: '#eee' },
+      formatter: function(params) {
+        const p = params[0];
+        let html = p.axisValue + '<br/>金价：<b style="color:#ffd700">' + p.value + '</b> 元/克';
+        // 查找该点是否有事件
+        if (hist.period !== '1d') {
+          const idx = xData.indexOf(p.axisValue);
+          const cur = yData[idx], prev = idx > 0 ? yData[idx - 1] : cur;
+          const chg = cur - prev;
+          const up = chg >= 0;
+          html += '<br/>当日实际：<b style="color:' + (up ? '#ff6b6b' : '#51cf66') + '">' + (up ? '▲ 上涨 ' : '▼ 下跌 ') + (chg >= 0 ? '+' : '') + chg.toFixed(2) + ' 元/克</b>';
+          const evt = chartEvents.find(e => e.date === p.axisValue);
+          if (evt) {
+            html += '<br/><br/><b>📌 ' + evt.title + '</b>';
+            html += '<br/><span style="color:#aabbcc">' + evt.reason + '</span>';
+          }
+        }
+        return html;
+      }
+    },
+    grid: { left: 60, right: 30, top: 30, bottom: 50 },
+    xAxis: {
+      type: 'category',
+      data: xData,
+      axisLine: { lineStyle: { color: '#445566' } },
+      axisLabel: { color: '#8899aa', fontSize: 11, hideOverlap: true }
+    },
+    yAxis: {
+      type: 'value',
+      scale: true,
+      axisLine: { lineStyle: { color: '#445566' } },
+      axisLabel: { color: '#8899aa', fontSize: 11 },
+      splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } }
+    },
+    dataZoom: [
+      { type: 'inside', start: 0, end: 100 },
+      { type: 'slider', start: 0, end: 100, height: 20, bottom: 10, borderColor: '#445566', textStyle: { color: '#8899aa' } }
+    ],
+    series: [{
+      name: '金价',
+      type: 'line',
+      data: yData,
+      smooth: true,
+      symbol: 'none',
+      lineStyle: { color: '#ffd700', width: 2 },
+      areaStyle: {
+        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+          { offset: 0, color: 'rgba(255,215,0,0.3)' },
+          { offset: 1, color: 'rgba(255,215,0,0)' }
+        ])
+      },
+      markPoint: {
+        symbol: 'pin',
+        symbolSize: 36,
+        data: markPoints,
+        tooltip: {
+          formatter: function(p) {
+            const e = p.data._event;
+            if (e) {
+              const chg = p.data._chg || 0, up = chg >= 0;
+              return '<b>' + e.title + '</b><br/><span style="color:' + (up ? '#ff6b6b' : '#51cf66') + '">' + (up ? '▲ 当日上涨 ' : '▼ 当日下跌 ') + (chg >= 0 ? '+' : '') + chg.toFixed(2) + ' 元/克</span><br/>' + e.reason;
+            }
+            return p.name;
+          }
+        }
+      }
+    }]
+  };
+  chart.setOption(option, true);
+  chart.on('click', function(params) {
+    if (params.componentType === 'markPoint') {
+      const e = params.data._event;
+      if (e) {
+        const chg = params.data._chg || 0, up = chg >= 0;
+        alert((up ? '▲ 当日上涨 ' : '▼ 当日下跌 ') + (chg >= 0 ? '+' : '') + chg.toFixed(2) + ' 元/克\n\n📌 ' + e.title + '\n\n背景：' + e.reason);
+      }
+    }
+  });
+}
+
+// ============ 信息收集 ============
+async function loadInfo() {
+  try {
+    const r = await fetch('/api/info');
+    const d = await r.json();
+    let html = '';
+    const catIcons = {
+      '宏观基本面': '🌍', '供需基本面': '⚖️', '资金持仓数据': '💰',
+      '国内专属信息': '🇨🇳', '核心跟踪指标': '🎯'
+    };
+    for (const [cat, items] of Object.entries(d.categories)) {
+      html += '<div class="info-cat"><h3>' + (catIcons[cat] || '•') + ' ' + cat + '</h3>';
+      items.forEach(it => {
+        html += '<div class="info-item"><div class="name">' + it.name + '</div>' +
+                '<div class="value">' + it.value + '</div>' +
+                '<div class="interpret">' + it.interpret + '</div></div>';
+      });
+      html += '</div>';
+    }
+    html += '<div class="refresh-tip">数据更新于 ' + new Date(d.fetched_at).toLocaleString('zh-CN') + '</div>';
+    document.getElementById('info-container').innerHTML = html;
+  } catch (e) {
+    document.getElementById('info-container').innerHTML = '<div style="color:#ff6b6b">加载失败</div>';
+  }
+}
+
+// ============ 走势分析 ============
+async function loadAnalysis() {
+  try {
+    const r = await fetch('/api/analysis');
+    const d = await r.json();
+    const dirClass = d.direction.includes('涨') ? 'dir-up' : (d.direction.includes('跌') ? 'dir-down' : 'dir-flat');
+    let html = '<div class="analysis-box">';
+    html += '<div class="analysis-direction ' + dirClass + '">' + d.direction + '</div>';
+    html += '<div style="color:#aabbcc;margin-bottom:10px;">综合评分：<b style="color:#ffd700">' + d.score + '</b> · 操作建议：' + d.action + '</div>';
+    html += '<div style="font-size:0.78rem;color:#667788;">分析方法：' + d.method + ' · ' + new Date(d.generated_at).toLocaleString('zh-CN') + '</div>';
+
+    if (d.llm_detail) {
+      html += '<div style="margin-top:14px;padding:14px;background:rgba(255,255,255,0.04);border-radius:8px;white-space:pre-wrap;font-size:0.85rem;line-height:1.7;">' + d.llm_detail + '</div>';
+    }
+
+    html += '<div class="factor-list"><div style="color:#ffd700;font-weight:600;margin-bottom:8px;">因子打分：</div>';
+    d.factors.forEach(f => {
+      const sc = f.score > 0 ? 'score-pos' : (f.score < 0 ? 'score-neg' : 'score-zero');
+      html += '<div class="factor-item"><span class="fname">' + f.name + '</span>' +
+              '<span class="fscore ' + sc + '">' + (f.score > 0 ? '+' : '') + f.score + '</span>' +
+              '<div style="color:#8899aa;margin-top:4px;clear:both;">' + f.reason + '</div></div>';
+    });
+    html += '</div></div>';
+    document.getElementById('analysis-container').innerHTML = html;
+  } catch (e) {
+    document.getElementById('analysis-container').innerHTML = '<div style="color:#ff6b6b">加载失败</div>';
+  }
+}
+
+// ============ 推送状态 ============
+async function loadPushStatus() {
+  try {
+    const r = await fetch('/api/push/status');
+    const d = await r.json();
+    let html = '';
+    if (d.channels.length === 0) {
+      html = '<span class="status-dot status-off"></span>未配置推送渠道。想推到个人微信，请在 config.py 填写 <b>Server酱</b> 或 <b>PushPlus</b> 的 token';
+    } else {
+      html = '<span class="status-dot status-on"></span>已启用：' + d.channels.map(c => c.name).join('、') + ` · 每 ${d.interval_minutes} 分钟推送`;
+    }
+    document.getElementById('push-status').innerHTML = html;
+  } catch (e) {}
+}
+
+async function testPush() {
+  const btn = event.target;
+  btn.textContent = '推送中...';
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/push/test', { method: 'POST' });
+    const d = await r.json();
+    document.getElementById('push-result').innerHTML = d.ok
+      ? '<span style="color:#51cf66">✓ ' + d.msg + '</span>'
+      : '<span style="color:#ff6b6b">✗ ' + d.msg + '</span>';
+  } catch (e) {
+    document.getElementById('push-result').innerHTML = '<span style="color:#ff6b6b">请求失败</span>';
+  }
+  btn.textContent = '立即推送一次（测试）';
+  btn.disabled = false;
+}
+
+function refreshAll() {
+  loadRealtime();
+  loadHistory(currentPeriod);
+  loadInfo();
+  loadAnalysis();
+}
+
+// ============ 初始化 ============
+window.addEventListener('load', () => {
+  loadRealtime();
+  loadHistory('5y');
+  loadInfo();
+  loadAnalysis();
+  loadPushStatus();
+  // 每30秒刷新实时金价，每5分钟刷新分析
+  setInterval(loadRealtime, 30000);
+  setInterval(loadAnalysis, 300000);
+});
+window.addEventListener('resize', () => { if (chart) chart.resize(); });
+</script>
+</body>
+</html>
