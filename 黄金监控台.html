@@ -589,40 +589,50 @@ function buildInfo(dxy, tips) {
   return cats;
 }
 
-function analyze(dxy, tips) {
+function analyze(dxy, tips, trendPct) {
   const factors = [];
   const add = (name, score, reason) => factors.push({ name, score, reason });
 
-  if (dxy < 102) add('美元指数', 2, `美元指数${dxy}处于低位，弱势美元利好黄金`);
-  else if (dxy < 105) add('美元指数', 1, `美元指数${dxy}偏弱，对金价形成一定支撑`);
-  else if (dxy < 107) add('美元指数', 0, `美元指数${dxy}中性`);
+  // 美元指数：104-105 为中性区间
+  if (dxy < 101.5) add('美元指数', 2, `美元指数${dxy}处于低位，弱势美元利好黄金`);
+  else if (dxy < 104) add('美元指数', 1, `美元指数${dxy}偏弱，对金价形成一定支撑`);
+  else if (dxy < 106) add('美元指数', 0, `美元指数${dxy}中性`);
   else add('美元指数', -2, `美元指数${dxy}强势，压制金价`);
 
-  if (tips < 1.0) add('实际利率(TIPS)', 2, `TIPS ${tips}%处于低位，持有黄金机会成本低`);
+  // 实际利率：1.8%-2.0% 为中性区间
+  if (tips < 1.4) add('实际利率(TIPS)', 2, `TIPS ${tips}%处于低位，持有黄金机会成本低`);
   else if (tips < 1.8) add('实际利率(TIPS)', 1, `TIPS ${tips}%偏低，利好黄金`);
-  else if (tips < 2.3) add('实际利率(TIPS)', 0, `TIPS ${tips}%中性`);
+  else if (tips < 2.2) add('实际利率(TIPS)', 0, `TIPS ${tips}%中性`);
   else add('实际利率(TIPS)', -2, `TIPS ${tips}%高企，压制金价`);
 
+  // 短期价格趋势：加入涨跌动能，避免天天看涨
+  if (trendPct > 2) add('短期趋势', 2, `近5日金价上涨${trendPct.toFixed(2)}%，动能偏强`);
+  else if (trendPct > 0.5) add('短期趋势', 1, `近5日金价小涨${trendPct.toFixed(2)}%，偏多`);
+  else if (trendPct > -0.5) add('短期趋势', 0, `近5日金价基本持平`);
+  else if (trendPct > -2) add('短期趋势', -1, `近5日金价下跌${Math.abs(trendPct).toFixed(2)}%，偏弱`);
+  else add('短期趋势', -2, `近5日金价大跌${Math.abs(trendPct).toFixed(2)}%，动能偏空`);
+
   add('美国通胀(CPI)', 0, 'CPI 3.2%温和');
-  add('美联储政策', 1, '利率路径偏鸽，利好黄金');
+  add('美联储政策', 0, '近期政策路径中性，等待新信号');
   add('地缘风险', 0, '近期无重大地缘事件');
-  add('央行购金', 1, '全球央行持续净购金，中长期底部支撑');
+  add('央行购金', 0.5, '全球央行持续净购金，中长期底部支撑（轻权重）');
 
   const total = factors.reduce((s, f) => s + f.score, 0);
   let direction, action;
-  if (total >= 4) { direction = '看涨'; action = '偏多思路，回调可考虑布局'; }
-  else if (total >= 1) { direction = '偏多震荡'; action = '区间偏多操作，注意止盈'; }
+  if (total >= 5) { direction = '看涨'; action = '偏多思路，回调可考虑布局'; }
+  else if (total >= 2) { direction = '偏多震荡'; action = '区间偏多操作，注意止盈'; }
   else if (total >= -1) { direction = '震荡'; action = '观望为主，区间高抛低吸'; }
   else if (total >= -4) { direction = '偏空震荡'; action = '区间偏空操作，控制仓位'; }
   else { direction = '看跌'; action = '偏空思路，反弹可考虑做空'; }
 
-  return { direction, action, score: total, factors };
+  return { direction, action, score: total.toFixed(1), factors };
 }
 
 async function loadInfoAndAnalysis() {
-  // 用模拟的 DXY 和 TIPS（浏览器无法直接取这两个免费数据）
-  const dxy = +(104 + (Math.random() - 0.5) * 2).toFixed(2);
-  const tips = +(1.6 + (Math.random() - 0.5) * 0.3).toFixed(3);
+  // 用模拟的 DXY、TIPS 和短期趋势（浏览器无法直接取这些免费数据）
+  const dxy = +(104 + (Math.random() - 0.5) * 5).toFixed(2);
+  const tips = +(1.8 + (Math.random() - 0.5) * 1.0).toFixed(3);
+  const trendPct = +(Math.random() * 6 - 3).toFixed(2);
 
   const cats = buildInfo(dxy, tips);
   const icons = { '宏观基本面': '🌍', '供需基本面': '⚖️', '资金持仓数据': '💰', '国内专属信息': '🇨🇳', '核心跟踪指标': '🎯' };
@@ -637,7 +647,7 @@ async function loadInfoAndAnalysis() {
   document.getElementById('info-container').innerHTML = html;
 
   // 分析
-  const ana = analyze(dxy, tips);
+  const ana = analyze(dxy, tips, trendPct);
   const dirClass = ana.direction.includes('涨') ? 'dir-up' : (ana.direction.includes('跌') ? 'dir-down' : 'dir-flat');
   let ahtml = '<div style="padding:4px;">';
   ahtml += '<div class="analysis-direction ' + dirClass + '">' + ana.direction + '</div>';
